@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medbh-rpa"
+version = "0.1.0"
+description = "RPA + agente de IA no msAdmin/Maxcore — Instituto MedBH"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "python-dotenv>=1.0.1",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.2.0",
+  "pywinauto>=0.6.8",
+  "playwright>=1.44.0",
+  "pillow>=10.3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2.0"]
+
+[project.scripts]
+medbh-rpa = "medbh_rpa.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["medbh_rpa*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
