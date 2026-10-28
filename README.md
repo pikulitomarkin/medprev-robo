@@ -16,7 +16,7 @@ Escopo comercial: `../escopo-rpa-medbh.md`
 
 ```powershell
 cd C:\MedBH
-git clone <URL_DO_REPO> rpa
+git clone https://github.com/pikulitomarkin/medprev-robo.git rpa
 cd rpa
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 copy .env.example .env
