@@ -34,12 +34,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_disc = sub.add_parser(
         "discover",
-        help="Lista janelas e dumpa a arvore UIA do msAdmin (Fase 0)",
+        help="Acha a janela mxAdmin (modo rapido, nao trava)",
     )
     p_disc.add_argument(
         "--no-tree",
         action="store_true",
-        help="So lista janelas, sem dump da arvore",
+        help="So procura a janela, sem screenshot/forms",
     )
 
     p_run = sub.add_parser("run", help="Executa um fluxo imediatamente")
@@ -60,8 +60,21 @@ def main(argv: list[str] | None = None) -> int:
         return print_healthcheck()
 
     if args.command == "discover":
-        result = run_discover(dump=not args.no_tree)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        result = run_discover(dump=not args.no_tree, fast=True)
+        # JSON enxuto no stdout (sem lista gigante)
+        slim = {
+            "ok": result.get("ok"),
+            "elapsed_sec": result.get("elapsed_sec"),
+            "window": result.get("window"),
+            "process_forms_count": result.get("process_forms_count"),
+            "screenshot": result.get("screenshot"),
+            "automation_strategy": result.get("automation_strategy"),
+            "note": result.get("note"),
+            "next_steps": result.get("next_steps"),
+            "message": result.get("message"),
+            "result_file": result.get("result_file"),
+        }
+        print(json.dumps(slim, ensure_ascii=False, indent=2))
         return 0 if result.get("ok") else 1
 
     if args.command == "run":

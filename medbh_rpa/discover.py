@@ -2,184 +2,87 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import time
 from typing import Any
 
 from medbh_rpa.config import get_settings
 
 log = logging.getLogger(__name__)
 
-BACKENDS = ("uia", "win32")
+
+def _progress(msg: str) -> None:
+    """Progresso no stderr — nao mistura com o JSON final."""
+    print(f"[discover] {msg}", file=sys.stderr, flush=True)
 
 
-def _list_via_desktop(backend: str) -> list[dict[str, Any]]:
-    from pywinauto import Desktop
-
-    out: list[dict[str, Any]] = []
-    try:
-        windows = Desktop(backend=backend).windows()
-    except Exception as exc:
-        log.warning("Desktop(%s) falhou: %s", backend, exc)
-        return out
-
-    for w in windows:
-        try:
-            text = (w.window_text() or "").strip()
-            class_name = ""
-            try:
-                class_name = getattr(w.element_info, "class_name", "") or ""
-            except Exception:
-                class_name = ""
-            if not text and not class_name:
-                continue
-            out.append(
-                {
-                    "backend": backend,
-                    "title": text,
-                    "class_name": class_name,
-                    "handle": int(w.handle) if w.handle else None,
-                }
-            )
-        except Exception:
-            continue
-    return out
-
-
-def _list_via_win32_enum() -> list[dict[str, Any]]:
+def _find_mxadmin(title_substr: str) -> dict[str, Any] | None:
+    """Busca rapida so via EnumWindows (nao enumera Desktop UIA inteiro)."""
     try:
         import win32gui
         import win32process
     except ImportError:
-        return []
-
-    out: list[dict[str, Any]] = []
-
-    def _cb(hwnd: int, _acc: list[dict[str, Any]]) -> bool:
-        if not win32gui.IsWindowVisible(hwnd):
-            return True
-        title = (win32gui.GetWindowText(hwnd) or "").strip()
-        try:
-            class_name = win32gui.GetClassName(hwnd) or ""
-        except Exception:
-            class_name = ""
-        pid = None
-        try:
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        except Exception:
-            pass
-        if not title and not class_name:
-            return True
-        out.append(
-            {
-                "backend": "win32_enum",
-                "title": title,
-                "class_name": class_name,
-                "handle": int(hwnd),
-                "pid": pid,
-            }
-        )
-        return True
-
-    win32gui.EnumWindows(_cb, out)
-    return out
-
-
-def list_windows() -> list[dict[str, Any]]:
-    seen: set[tuple[str, int | None]] = set()
-    merged: list[dict[str, Any]] = []
-    for backend in BACKENDS:
-        for item in _list_via_desktop(backend):
-            key = (item.get("title", ""), item.get("handle"))
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(item)
-    for item in _list_via_win32_enum():
-        key = (item.get("title", ""), item.get("handle"))
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(item)
-    return merged
-
-
-def _find_hwnd(title_substr: str) -> tuple[int | None, str | None, str | None, int | None]:
-    title_l = title_substr.lower().strip()
-    for w in list_windows():
-        title = w.get("title") or ""
-        if title_l and title_l in title.lower() and w.get("handle"):
-            return int(w["handle"]), title, w.get("class_name"), w.get("pid")
-    return None, None, None, None
-
-
-def _pid_of_hwnd(hwnd: int) -> int | None:
-    try:
-        import win32process
-
-        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        return int(pid)
-    except Exception:
+        _progress("pywin32 ausente")
         return None
 
-
-def _enum_child_hwnds(parent: int) -> list[dict[str, Any]]:
-    try:
-        import win32gui
-    except ImportError:
-        return []
-
-    kids: list[dict[str, Any]] = []
+    title_l = title_substr.lower().strip()
+    found: dict[str, Any] | None = None
 
     def _cb(hwnd: int, _acc: list) -> bool:
+        nonlocal found
+        if found is not None:
+            return False
         try:
-            title = win32gui.GetWindowText(hwnd) or ""
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            title = (win32gui.GetWindowText(hwnd) or "").strip()
+            if not title or title_l not in title.lower():
+                return True
             class_name = win32gui.GetClassName(hwnd) or ""
-            visible = bool(win32gui.IsWindowVisible(hwnd))
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
             rect = win32gui.GetWindowRect(hwnd)
-            kids.append(
-                {
-                    "handle": int(hwnd),
-                    "title": title,
-                    "class_name": class_name,
-                    "visible": visible,
-                    "rect": list(rect),
-                }
-            )
+            found = {
+                "hwnd": int(hwnd),
+                "pid": int(pid),
+                "title": title,
+                "class_name": class_name,
+                "rect": list(rect),
+            }
+            return False
         except Exception:
-            pass
-        return True
+            return True
 
-    try:
-        win32gui.EnumChildWindows(parent, _cb, [])
-    except Exception as exc:
-        log.warning("EnumChildWindows(%s): %s", parent, exc)
-    return kids
+    win32gui.EnumWindows(_cb, [])
+    return found
 
 
-def _windows_of_pid(pid: int) -> list[dict[str, Any]]:
+def _list_same_pid(pid: int, *, limit: int = 40) -> list[dict[str, Any]]:
     try:
         import win32gui
         import win32process
     except ImportError:
         return []
 
-    found: list[dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
 
     def _cb(hwnd: int, _acc: list) -> bool:
+        if len(out) >= limit:
+            return False
         try:
             _, wpid = win32process.GetWindowThreadProcessId(hwnd)
             if int(wpid) != int(pid):
                 return True
-            title = win32gui.GetWindowText(hwnd) or ""
-            class_name = win32gui.GetClassName(hwnd) or ""
-            visible = bool(win32gui.IsWindowVisible(hwnd))
-            if not visible and not title:
+            if not win32gui.IsWindowVisible(hwnd):
                 return True
-            found.append(
+            title = (win32gui.GetWindowText(hwnd) or "").strip()
+            class_name = win32gui.GetClassName(hwnd) or ""
+            if not title and "WindowsForms" not in class_name:
+                return True
+            out.append(
                 {
-                    "handle": int(hwnd),
+                    "hwnd": int(hwnd),
                     "title": title,
                     "class_name": class_name,
-                    "visible": visible,
                 }
             )
         except Exception:
@@ -187,278 +90,91 @@ def _windows_of_pid(pid: int) -> list[dict[str, Any]]:
         return True
 
     win32gui.EnumWindows(_cb, [])
-    return found
+    return out
 
 
-def _connect_window(hwnd: int, backend: str) -> Any | None:
-    from pywinauto import Application
-
+def _screenshot_hwnd(hwnd: int, path: Any) -> bool:
     try:
-        app = Application(backend=backend).connect(handle=hwnd)
-        return app.window(handle=hwnd)
+        from pywinauto import Application
+
+        # win32 connect e mais leve; timeout curto
+        app = Application(backend="win32").connect(handle=hwnd, timeout=3)
+        win = app.window(handle=hwnd)
+        img = win.capture_as_image()
+        img.save(str(path))
+        return True
     except Exception as exc:
-        log.warning("connect handle=%s backend=%s: %s", hwnd, backend, exc)
-        return None
+        _progress(f"screenshot falhou: {exc}")
+        return False
 
 
-def _identifiers_text(target: Any, depth: int = 6) -> str:
-    try:
-        from io import StringIO
-        import sys
-
-        buf = StringIO()
-        old = sys.stdout
-        sys.stdout = buf
-        try:
-            target.print_control_identifiers(depth=depth)
-        finally:
-            sys.stdout = old
-        return buf.getvalue()
-    except Exception as exc:
-        return f"(identifiers indisponivel: {exc})"
-
-
-def _walk_controls(root: Any, *, max_depth: int = 8, limit: int = 1500) -> list[dict[str, Any]]:
-    controls: list[dict[str, Any]] = []
-
-    def add_elem(elem: Any, depth: int) -> None:
-        if len(controls) >= limit:
-            return
-        try:
-            info = elem.element_info
-            controls.append(
-                {
-                    "depth": depth,
-                    "control_type": str(getattr(info, "control_type", "") or ""),
-                    "name": str(getattr(info, "name", "") or ""),
-                    "automation_id": str(getattr(info, "automation_id", "") or ""),
-                    "class_name": str(getattr(info, "class_name", "") or ""),
-                }
-            )
-        except Exception:
-            return
-
-    # Preferir descendants (WinForms)
-    try:
-        add_elem(root, 0)
-        for d in list(root.descendants())[:limit]:
-            add_elem(d, 1)
-            if len(controls) >= limit:
-                break
-        if len(controls) > 1:
-            return controls
-    except Exception:
-        pass
-
-    def walk(elem: Any, depth: int) -> None:
-        if depth > max_depth or len(controls) >= limit:
-            return
-        add_elem(elem, depth)
-        try:
-            for child in elem.children():
-                walk(child, depth + 1)
-        except Exception:
-            return
-
-    walk(root, 0)
-    return controls
-
-
-def dump_tree(title_substr: str, *, max_depth: int = 8) -> dict[str, Any]:
-    hwnd, found_title, class_name, pid = _find_hwnd(title_substr)
-    all_titles = [w["title"] for w in list_windows() if w.get("title")]
-
-    if hwnd is None:
-        hints = [
-            t
-            for t in all_titles
-            if any(x in t.lower() for x in ("admin", "max", "mx", "viv", "run"))
-        ]
-        return {
-            "ok": False,
-            "message": f"Nenhuma janela contem '{title_substr}'.",
-            "hints": hints[:20],
-            "windows": all_titles[:40],
-        }
-
-    if pid is None:
-        pid = _pid_of_hwnd(hwnd)
-
-    children = _enum_child_hwnds(hwnd)
-    siblings = _windows_of_pid(pid) if pid else []
-
-    # Dump UIA da janela principal
-    used_backend = None
-    controls: list[dict[str, Any]] = []
-    identifiers = ""
-    for backend in ("uia", "win32"):
-        target = _connect_window(hwnd, backend)
-        if target is None:
-            continue
-        used_backend = backend
-        controls = _walk_controls(target, max_depth=max_depth)
-        identifiers = _identifiers_text(target, depth=max_depth)
-        if len(controls) > 2 or (identifiers and "Button" in identifiers):
-            break
-
-    # Dump de cada janela WinForms do mesmo PID (MDI / forms internas)
-    form_dumps: list[dict[str, Any]] = []
-    interesting = [
-        w
-        for w in siblings
-        if w.get("visible")
-        and "WindowsForms10" in (w.get("class_name") or "")
-        and int(w["handle"]) != int(hwnd)
-    ]
-    # Limita para nao explodir
-    for w in interesting[:25]:
-        form: dict[str, Any] = {
-            "handle": w["handle"],
-            "title": w.get("title"),
-            "class_name": w.get("class_name"),
-        }
-        t = _connect_window(int(w["handle"]), "uia")
-        if t is None:
-            t = _connect_window(int(w["handle"]), "win32")
-        if t is not None:
-            ctrls = _walk_controls(t, max_depth=5, limit=200)
-            ids = _identifiers_text(t, depth=4)
-            form["controls_count"] = len(ctrls)
-            form["controls_sample"] = [
-                c for c in ctrls if c.get("name") or c.get("automation_id")
-            ][:40]
-            form["identifiers_preview"] = ids[:4000]
-            # nomes uteis
-            form["named"] = sorted(
-                {
-                    c["name"]
-                    for c in ctrls
-                    if c.get("name") and len(c["name"]) < 80
-                }
-            )[:80]
-        form_dumps.append(form)
-
-    named_main = sorted(
-        {c["name"] for c in controls if c.get("name") and len(c["name"]) < 80}
-    )[:80]
-    named_forms = sorted(
-        {n for f in form_dumps for n in (f.get("named") or [])}
-    )[:120]
-
-    strategy = "uia"
-    if len(controls) <= 3 and not named_forms:
-        strategy = "image_ocr_or_coords"
-    elif named_forms or len(controls) > 3:
-        strategy = "uia_on_child_forms"
-
-    ok = True  # janela encontrada; mesmo com poucos controles
-    return {
-        "ok": ok,
-        "backend_used": used_backend,
-        "hwnd": hwnd,
-        "pid": pid,
-        "window_title": found_title,
-        "class_name": class_name,
-        "controls_count": len(controls),
-        "controls": controls[:500],
-        "named_controls_main": named_main,
-        "child_hwnd_count": len(children),
-        "child_hwnds_sample": children[:40],
-        "process_forms_count": len(interesting),
-        "process_forms": form_dumps,
-        "named_controls_forms": named_forms,
-        "identifiers_preview": (identifiers or "")[:8000],
-        "automation_strategy": strategy,
-        "note": (
-            "mxAdmin e WinForms. A janela principal expoe pouco na UIA (so TitleBar). "
-            "Controles uteis costumam estar em forms filhas do mesmo PID (RunAdmin.exe). "
-            "Se named_controls_forms estiver vazio, o app desenha a UI sem acessibilidade "
-            "e o RPA precisa de imagem/OCR ou coordenadas."
-        ),
-    }
-
-
-def run_discover(*, dump: bool = True) -> dict[str, Any]:
+def run_discover(*, dump: bool = True, fast: bool = True) -> dict[str, Any]:
+    """
+    fast=True (padrao): so acha a janela mxAdmin, lista forms do PID e tira screenshot.
+    Nao chama print_control_identifiers (isso travava a sessao).
+    """
     settings = get_settings()
     settings.artifacts_dir.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
 
-    windows = list_windows()
-    # Resumo enxuto no stdout; completo no arquivo
-    slim_windows = [
-        w
-        for w in windows
-        if w.get("title")
-        and any(
-            x in (w.get("title") or "").lower()
-            for x in ("mxadmin", "admin", "loader", "run", "anydesk", "git")
-        )
-    ]
+    title_key = settings.msadmin_window_title or "mxAdmin"
+    _progress(f"procurando janela com titulo contendo '{title_key}'...")
+    hit = _find_mxadmin(title_key)
+
+    if hit is None:
+        result = {
+            "ok": False,
+            "elapsed_sec": round(time.time() - t0, 2),
+            "message": (
+                f"Janela '{title_key}' nao encontrada. "
+                "Abra o mxAdmin, deixe na frente e rode de novo."
+            ),
+            "msadmin_window_title_env": settings.msadmin_window_title,
+            "msadmin_exe_env": settings.msadmin_exe,
+        }
+        out = settings.artifacts_dir / "discover_fast.json"
+        out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        result["result_file"] = str(out.resolve())
+        return result
+
+    _progress(f"achou hwnd={hit['hwnd']} pid={hit['pid']} title={hit['title']!r}")
+
+    forms: list[dict[str, Any]] = []
+    if dump:
+        _progress("listando janelas do mesmo processo (limite 40)...")
+        forms = _list_same_pid(int(hit["pid"]), limit=40)
+
+    shot_path = settings.artifacts_dir / "mxadmin_window.png"
+    shot_ok = False
+    if dump:
+        _progress("capturando screenshot da janela...")
+        shot_ok = _screenshot_hwnd(int(hit["hwnd"]), shot_path)
 
     result: dict[str, Any] = {
         "ok": True,
+        "mode": "fast" if fast else "full",
+        "elapsed_sec": round(time.time() - t0, 2),
         "msadmin_window_title_env": settings.msadmin_window_title,
         "msadmin_exe_env": settings.msadmin_exe,
-        "windows_count": len(windows),
-        "windows_interesting": slim_windows,
+        "window": hit,
+        "process_forms_count": len(forms),
+        "process_forms": forms,
+        "screenshot": str(shot_path.resolve()) if shot_ok else None,
+        "automation_strategy": "image_ocr_or_coords",
+        "note": (
+            "Discover rapido: nao dumpa arvore UIA (travava). "
+            "mxAdmin e WinForms 32-bit com pouca acessibilidade. "
+            "Proximo passo: RPA por screenshot + coordenadas/OCR."
+        ),
+        "next_steps": [
+            "Confirme que artifacts\\mxadmin_window.png mostra a tela do sistema",
+            "No AnyDesk, deixe o mxAdmin na tela de Agenda",
+            "Avise o Marcos para gravar o fluxo por imagem/coords",
+        ],
     }
 
-    out_windows = settings.artifacts_dir / "discover_windows.json"
-    out_windows.write_text(
-        json.dumps({"windows": windows, **result}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    if dump and settings.msadmin_window_title:
-        tree = dump_tree(settings.msadmin_window_title)
-        result["tree"] = {
-            "ok": tree.get("ok"),
-            "backend_used": tree.get("backend_used"),
-            "hwnd": tree.get("hwnd"),
-            "pid": tree.get("pid"),
-            "window_title": tree.get("window_title"),
-            "class_name": tree.get("class_name"),
-            "controls_count": tree.get("controls_count"),
-            "named_controls_main": tree.get("named_controls_main"),
-            "process_forms_count": tree.get("process_forms_count"),
-            "named_controls_forms": tree.get("named_controls_forms"),
-            "automation_strategy": tree.get("automation_strategy"),
-            "note": tree.get("note"),
-            "message": tree.get("message"),
-            "hints": tree.get("hints"),
-        }
-        out_tree = settings.artifacts_dir / "discover_tree.json"
-        out_tree.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        ids = tree.get("identifiers_preview") or ""
-        if ids:
-            (settings.artifacts_dir / "discover_identifiers.txt").write_text(
-                ids, encoding="utf-8"
-            )
-            result["identifiers_file"] = str(
-                (settings.artifacts_dir / "discover_identifiers.txt").resolve()
-            )
-
-        # Resumo dos forms para leitura humana
-        forms_summary = []
-        for f in tree.get("process_forms") or []:
-            forms_summary.append(
-                {
-                    "title": f.get("title"),
-                    "handle": f.get("handle"),
-                    "controls_count": f.get("controls_count"),
-                    "named": f.get("named"),
-                }
-            )
-        (settings.artifacts_dir / "discover_forms.json").write_text(
-            json.dumps(forms_summary, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        result["forms_file"] = str(
-            (settings.artifacts_dir / "discover_forms.json").resolve()
-        )
-
-        result["tree_file"] = str(out_tree.resolve())
-        result["ok"] = bool(tree.get("ok"))
-
-    result["windows_file"] = str(out_windows.resolve())
+    out = settings.artifacts_dir / "discover_fast.json"
+    out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    result["result_file"] = str(out.resolve())
+    _progress(f"ok em {result['elapsed_sec']}s -> {out}")
     return result
