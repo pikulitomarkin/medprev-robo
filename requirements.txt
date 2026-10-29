@@ -5,6 +5,7 @@ pydantic-settings>=2.2.0
 
 # RPA / UI (instalar o que a Fase 0 confirmar)
 pywinauto>=0.6.8
+pywin32>=306
 playwright>=1.44.0
 
 # Util

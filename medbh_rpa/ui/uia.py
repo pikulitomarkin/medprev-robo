@@ -28,17 +28,25 @@ class UiaAdapter(UiAdapter):
             ) from exc
 
     def healthcheck(self) -> dict[str, Any]:
-        from pywinauto import Desktop
+        from medbh_rpa.discover import dump_tree, list_windows
 
         title = self.settings.msadmin_window_title
-        windows = Desktop(backend="uia").windows()
-        matches = [w.window_text() for w in windows if title.lower() in (w.window_text() or "").lower()]
+        tree = dump_tree(title, max_depth=1)
+        matches = [
+            w["title"]
+            for w in list_windows()
+            if title.lower() in (w.get("title") or "").lower()
+        ]
         return {
-            "ok": bool(matches),
-            "backend": "uia",
+            "ok": bool(tree.get("ok")),
+            "backend": tree.get("backend_used") or "uia/win32",
             "window_title_config": title,
             "matches": matches[:10],
-            "message": "Janela encontrada" if matches else "Janela do msAdmin não encontrada",
+            "message": (
+                "Janela encontrada"
+                if tree.get("ok")
+                else tree.get("message") or "Janela do mxAdmin nao encontrada"
+            ),
         }
 
     def ensure_logged_in(self) -> None:
