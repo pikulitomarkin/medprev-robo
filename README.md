@@ -18,10 +18,12 @@ Escopo comercial: `../escopo-rpa-medbh.md`
 cd C:\MedBH
 git clone https://github.com/pikulitomarkin/medprev-robo.git rpa
 cd rpa
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
-copy .env.example .env
+scripts\install.bat
 notepad .env
 ```
+
+No Git CMD (maquina do cliente), preferir o `.bat`. O PowerShell antigo do Windows quebra com acentos no `.ps1`.
+
 
 Ajuste no `.env` pelo menos:
 
