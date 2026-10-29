@@ -7,6 +7,7 @@ from typing import Any
 
 from medbh_rpa.config import get_settings
 from medbh_rpa.db.jobs import JobStore
+from medbh_rpa.discover import run_discover
 from medbh_rpa.flows import FLOWS
 from medbh_rpa.healthcheck import print_healthcheck
 from medbh_rpa.logging_utils import setup_logging
@@ -31,6 +32,16 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("healthcheck", help="Verifica ambiente e UI")
 
+    p_disc = sub.add_parser(
+        "discover",
+        help="Lista janelas e dumpa a arvore UIA do msAdmin (Fase 0)",
+    )
+    p_disc.add_argument(
+        "--no-tree",
+        action="store_true",
+        help="So lista janelas, sem dump da arvore",
+    )
+
     p_run = sub.add_parser("run", help="Executa um fluxo imediatamente")
     p_run.add_argument("flow", choices=sorted(FLOWS.keys()))
     p_run.add_argument("--payload", default="{}", help="JSON do payload")
@@ -47,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "healthcheck":
         return print_healthcheck()
+
+    if args.command == "discover":
+        result = run_discover(dump=not args.no_tree)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("ok") else 1
 
     if args.command == "run":
         payload = _parse_payload(args.payload)
