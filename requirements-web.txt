@@ -1,0 +1,2 @@
+# Opcional — so se partes do sistema forem web
+playwright>=1.44.0

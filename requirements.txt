@@ -1,15 +1,15 @@
-# Runtime
+# Runtime core (mxAdmin / WinForms)
 python-dotenv>=1.0.1
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
 
-# RPA / UI (instalar o que a Fase 0 confirmar)
+# RPA desktop
 pywinauto>=0.6.8
 pywin32>=306
-playwright>=1.44.0
-
-# Util
 pillow>=10.3.0
 
 # Dev / testes
 pytest>=8.2.0
+
+# Playwright e opcional (UI web). No Python 3.14-32 costuma exigir Build Tools.
+# Instalar so se precisar: pip install -r requirements-web.txt
