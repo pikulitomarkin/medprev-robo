@@ -17,6 +17,11 @@ dependencies = [
   "pillow>=10.3.0",
   "numpy>=1.26.0",
   "opencv-python-headless>=4.8.0",
+  "mcp>=1.9.0,<3",
+  "uvicorn>=0.30.0",
+  "starlette>=0.37.0",
+  "anyio>=4.0.0",
+  "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +30,7 @@ web = ["playwright>=1.44.0"]
 
 [project.scripts]
 medbh-rpa = "medbh_rpa.__main__:main"
+medbh-mcp = "medbh_rpa.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

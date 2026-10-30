@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "medbh-mxadmin": {
+      "url": "http://100.x.y.z:8765/mcp",
+      "headers": {
+        "Authorization": "Bearer COLE_O_MESMO_MCP_TOKEN_DO_ENV_DO_CONSULTORIO"
+      }
+    }
+  }
+}

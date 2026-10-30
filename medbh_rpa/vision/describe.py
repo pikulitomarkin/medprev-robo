@@ -92,9 +92,13 @@ def describe_screen(image_path: Path) -> dict[str, Any]:
         "Liste em JSON os elementos clicaveis visiveis: menus, botoes, "
         "campos e abas. Formato: "
         '{"elements":[{"name":"...","type":"button|field|menu|tab",'
+        '"x":int,"y":int,'
         '"approx_position":"top|center|bottom left|right",'
-        '"notes":"..."}]} '
-        "Sem markdown, so JSON."
+        '"notes":"..."}],'
+        '"screen_title":"...","purpose":"..."} '
+        "x,y = centro aproximado em pixels. "
+        "NAO inclua CPF, senhas, tokens ou dados pessoais completos — "
+        "use rotulos genericos (ex.: campo CPF). Sem markdown, so JSON."
     )
     result = ask_vision_json(image_path, prompt, max_tokens=1200)
     if not result.get("ok"):

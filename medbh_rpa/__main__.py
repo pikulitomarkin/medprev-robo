@@ -88,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     p_worker = sub.add_parser("worker", help="Worker da fila")
     p_worker.add_argument("--poll", type=float, default=2.0)
 
+    sub.add_parser("mcp", help="Sobe MCP HTTP (Tailscale) para o Cursor controlar o mxAdmin")
+
     args = parser.parse_args(argv)
 
     if args.command == "healthcheck":
@@ -228,6 +230,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "worker":
         worker_loop(poll_seconds=args.poll)
+        return 0
+
+    if args.command == "mcp":
+        from medbh_rpa.mcp_server import main as mcp_main
+
+        mcp_main()
         return 0
 
     parser.print_help()

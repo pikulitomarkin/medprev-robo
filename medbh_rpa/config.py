@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     agent_model: str = Field(default="gpt-4.1-mini", alias="AGENT_MODEL")
 
+    # MCP remoto (Cursor -> consultorio via Tailscale)
+    mcp_token: str = Field(default="", alias="MCP_TOKEN")
+    mcp_host: str = Field(default="0.0.0.0", alias="MCP_HOST")
+    mcp_port: int = Field(default=8765, alias="MCP_PORT")
+
     @property
     def jobs_db_path(self) -> Path:
         return self.data_dir / "jobs.sqlite3"
