@@ -71,17 +71,32 @@ def ask_vision_json(
 
 
 def _parse_json_loose(text: str) -> Any | None:
+    raw = (text or "").strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if lines:
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        raw = "\n".join(lines).strip()
     try:
-        return json.loads(text)
+        return json.loads(raw)
     except Exception:
         pass
-    start = text.find("{")
-    end = text.rfind("}")
+    start = raw.find("{")
+    end = raw.rfind("}")
     if start >= 0 and end > start:
+        chunk = raw[start : end + 1]
         try:
-            return json.loads(text[start : end + 1])
+            return json.loads(chunk)
         except Exception:
-            return None
+            # tenta trocar aspas tipograficas
+            try:
+                return json.loads(
+                    chunk.replace("“", '"').replace("”", '"').replace("’", "'")
+                )
+            except Exception:
+                return None
     return None
 
 

@@ -188,7 +188,7 @@ TOOL_SCHEMA: list[dict[str, Any]] = [
 def create_app(token: str) -> Any:
     from starlette.applications import Starlette
     from starlette.requests import Request
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, Response
     from starlette.routing import Route
 
     settings = get_settings()
@@ -203,6 +203,15 @@ def create_app(token: str) -> Any:
 
     async def health(_request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "service": "medbh-mxadmin", "mode": "http-lite"})
+
+    async def last_png(request: Request) -> Response:
+        """Baixa artifacts/last.png (para o agente ver a tela remotamente)."""
+        if not _auth_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        path = settings.artifacts_dir / "last.png"
+        if not path.exists():
+            return JSONResponse({"error": "last.png ausente — rode mx_snapshot"}, status_code=404)
+        return Response(path.read_bytes(), media_type="image/png")
 
     async def list_tools(request: Request) -> JSONResponse:
         if not _auth_ok(request):
@@ -297,6 +306,7 @@ def create_app(token: str) -> Any:
 
     routes = [
         Route("/health", health, methods=["GET"]),
+        Route("/last.png", last_png, methods=["GET"]),
         Route("/tools", list_tools, methods=["GET"]),
         Route("/tools/{name}", call_tool, methods=["POST"]),
         Route("/mcp", mcp_alias, methods=["POST", "GET"]),
