@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     msadmin_exe: str = Field(default="", alias="MSADMIN_EXE")
-    msadmin_window_title: str = Field(default="msAdmin", alias="MSADMIN_WINDOW_TITLE")
+    msadmin_window_title: str = Field(default="mxAdmin", alias="MSADMIN_WINDOW_TITLE")
     msadmin_user: str = Field(default="", alias="MSADMIN_USER")
     msadmin_password: str = Field(default="", alias="MSADMIN_PASSWORD")
 
