@@ -133,10 +133,11 @@ def open_menu_item(
     allow_write: bool = False,
     item_x: int | None = None,
     item_y: int | None = None,
+    drag: bool = True,
 ) -> dict[str, Any]:
     """
-    Abre menu do topo e vai ao item com mouse LENTO (glide).
-    WinForms fecha dropdown se o cursor 'teleportar'.
+    Abre menu do topo arrastando o mouse (drag) ate o item.
+    WinForms fecha dropdown se soltar cedo ou teleportar o cursor.
     """
     _ = allow_write
     coords_map = _load_menu_coords(controller.maps_dir)
@@ -192,7 +193,7 @@ def open_menu_item(
         sy_i,
         glide_ms,
     )
-    click_with_glide(sx_m, sy_m, sx_i, sy_i, glide_ms=int(glide_ms))
+    click_with_glide(sx_m, sy_m, sx_i, sy_i, glide_ms=int(glide_ms), drag=bool(drag))
     time.sleep(max(0.4, pause))
 
     after = controller.snapshot("after_menu_item")
@@ -201,7 +202,7 @@ def open_menu_item(
         "menu": menu,
         "item": item,
         "matched_label": matched,
-        "mode": "glide",
+        "mode": "drag" if drag else "glide",
         "glide_ms": glide_ms,
         "menu_coords": {"x": mx, "y": my, "confidence": conf},
         "item_coords": {"x": ix, "y": iy},

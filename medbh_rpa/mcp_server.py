@@ -111,6 +111,7 @@ def build_tools(vc: VisionController) -> dict[str, Callable[..., dict[str, Any]]
         glide_ms: int = 1200,
         item_x: int | None = None,
         item_y: int | None = None,
+        drag: bool = True,
     ) -> dict[str, Any]:
         return open_menu_item(
             vc,
@@ -120,6 +121,7 @@ def build_tools(vc: VisionController) -> dict[str, Callable[..., dict[str, Any]]
             glide_ms=int(glide_ms),
             item_x=item_x,
             item_y=item_y,
+            drag=bool(drag),
         )
 
     def mx_map_screen(name: str, close_after: bool = False) -> dict[str, Any]:

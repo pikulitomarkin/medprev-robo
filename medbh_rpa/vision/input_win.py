@@ -65,14 +65,32 @@ def click_with_glide(
     *,
     glide_ms: int = 1100,
     hold_before_click_ms: int = 200,
+    drag: bool = True,
 ) -> None:
     """
-    Abre menu e vai ao item sem 'teleportar' o mouse.
-    1) clica no menu  2) desliza ate o item  3) clica o item
+    Abre menu WinForms sensivel.
+    drag=True (padrao): mouse DOWN no menu, desliza ate o item, UP (arrasta).
+    drag=False: clique no menu, desliza, clique no item.
     """
+    import win32api
+    import win32con
+
+    if drag:
+        win32api.SetCursorPos((int(x_menu), int(y_menu)))
+        time.sleep(0.12)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(0.2)
+        # desce um pouco ainda pressionado (entra no dropdown)
+        mid_y = y_menu + max(12, (y_item - y_menu) // 3)
+        glide_screen(x_menu, y_menu, x_menu, mid_y, duration_ms=max(250, glide_ms // 3))
+        glide_screen(x_menu, mid_y, x_item, y_item, duration_ms=glide_ms)
+        time.sleep(hold_before_click_ms / 1000.0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        time.sleep(0.15)
+        return
+
     click_screen(x_menu, y_menu)
     time.sleep(0.35)
-    # comeca um pouco abaixo do texto do menu (entra na area do dropdown)
     mid_y = y_menu + max(8, (y_item - y_menu) // 4)
     glide_screen(x_menu, y_menu, x_menu, mid_y, duration_ms=max(200, glide_ms // 3))
     glide_screen(x_menu, mid_y, x_item, y_item, duration_ms=glide_ms)
