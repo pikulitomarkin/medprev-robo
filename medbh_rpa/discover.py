@@ -93,21 +93,6 @@ def _list_same_pid(pid: int, *, limit: int = 40) -> list[dict[str, Any]]:
     return out
 
 
-def _screenshot_hwnd(hwnd: int, path: Any) -> bool:
-    try:
-        from pywinauto import Application
-
-        # win32 connect e mais leve; timeout curto
-        app = Application(backend="win32").connect(handle=hwnd, timeout=3)
-        win = app.window(handle=hwnd)
-        img = win.capture_as_image()
-        img.save(str(path))
-        return True
-    except Exception as exc:
-        _progress(f"screenshot falhou: {exc}")
-        return False
-
-
 def run_discover(*, dump: bool = True, fast: bool = True) -> dict[str, Any]:
     """
     fast=True (padrao): so acha a janela mxAdmin, lista forms do PID e tira screenshot.
@@ -145,10 +130,16 @@ def run_discover(*, dump: bool = True, fast: bool = True) -> dict[str, Any]:
         forms = _list_same_pid(int(hit["pid"]), limit=40)
 
     shot_path = settings.artifacts_dir / "mxadmin_window.png"
-    shot_ok = False
+    shot_meta: dict[str, Any] = {}
     if dump:
-        _progress("capturando screenshot da janela...")
-        shot_ok = _screenshot_hwnd(int(hit["hwnd"]), shot_path)
+        _progress("capturando screenshot (PrintWindow/OpenCV path)...")
+        from medbh_rpa.vision.capture import capture_window
+
+        shot_meta = capture_window(title_key, shot_path, bring_to_front=True)
+        if shot_meta.get("ok"):
+            from shutil import copyfile
+
+            copyfile(shot_path, settings.artifacts_dir / "last.png")
 
     result: dict[str, Any] = {
         "ok": True,
@@ -159,17 +150,18 @@ def run_discover(*, dump: bool = True, fast: bool = True) -> dict[str, Any]:
         "window": hit,
         "process_forms_count": len(forms),
         "process_forms": forms,
-        "screenshot": str(shot_path.resolve()) if shot_ok else None,
+        "screenshot": shot_meta.get("path") if shot_meta.get("ok") else None,
+        "screenshot_method": shot_meta.get("method"),
+        "screenshot_error": shot_meta.get("message"),
         "automation_strategy": "image_ocr_or_coords",
         "note": (
-            "Discover rapido: nao dumpa arvore UIA (travava). "
-            "mxAdmin e WinForms 32-bit com pouca acessibilidade. "
-            "Proximo passo: RPA por screenshot + coordenadas/OCR."
+            "Discover rapido + captura PrintWindow. "
+            "Use: python -m medbh_rpa vision snapshot|scan|click-template"
         ),
         "next_steps": [
-            "Confirme que artifacts\\mxadmin_window.png mostra a tela do sistema",
-            "No AnyDesk, deixe o mxAdmin na tela de Agenda",
-            "Avise o Marcos para gravar o fluxo por imagem/coords",
+            "python -m medbh_rpa vision snapshot",
+            "python -m medbh_rpa vision scan   (OpenAI descreve a tela)",
+            "Recortar templates e gravar fluxo em data/maps/",
         ],
     }
 

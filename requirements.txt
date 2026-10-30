@@ -3,10 +3,12 @@ python-dotenv>=1.0.1
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
 
-# RPA desktop
+# RPA desktop + visao
 pywinauto>=0.6.8
 pywin32>=306
 pillow>=10.3.0
+numpy>=1.26.0
+opencv-python-headless>=4.8.0
 
 # Dev / testes
 pytest>=8.2.0
