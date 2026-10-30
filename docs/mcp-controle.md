@@ -1,15 +1,15 @@
 # MCP de controle do mxAdmin
 
-O Cursor (PC do Marcos) controla o mxAdmin no consultório via **Tailscale + MCP HTTP**, sem colar comando por comando no AnyDesk.
+O agente no PC do Marcos controla o mxAdmin via **Tailscale + HTTP lite** (Starlette), sem o pacote `mcp` (evita build de `cryptography` no Python 3.14-32).
 
 ```
-Cursor (Marcos) --Tailscale--> http://100.x.y.z:8765/mcp --Bearer--> vision RPA --> mxAdmin
+Cursor/agente (Marcos) --Tailscale--> http://IP:8765/tools/<nome> --Bearer--> vision RPA --> mxAdmin
 ```
 
 ## 1. Consultório (uma vez)
 
 1. Instalar [Tailscale](https://tailscale.com/download) e entrar na **mesma conta/tailnet** do Marcos.
-2. Anotar o IP Tailscale — `tailscale ip -4` (consultório atual: `100.74.86.51`).
+2. Anotar o IP Tailscale — `tailscale ip -4` (consultório atual: `100.80.162.76` / `desktop-u6hkfin`).
 3. No repo:
 
 ```bat
@@ -53,7 +53,7 @@ Deixar essa janela aberta.
 ## 3. Cursor no PC do Marcos
 
 1. Copiar [`mcp.json.example`](mcp.json.example) para a config MCP do Cursor.
-2. URL `http://100.74.86.51:8765/mcp` + o mesmo `MCP_TOKEN` do `.env` do consultório.
+2. URL `http://100.80.162.76:8765/mcp` + o mesmo `MCP_TOKEN` do `.env` do consultório.
 3. Settings → MCP → Refresh. Namespace esperado: `medbh-mxadmin` (tools `mx_*`).
 
 Exemplo de entrada:

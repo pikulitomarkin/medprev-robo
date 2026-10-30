@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "medbh-mxadmin": {
-      "url": "http://100.74.86.51:8765/mcp",
+      "url": "http://100.80.162.76:8765/mcp",
       "type": "http",
       "headers": {
         "Authorization": "Bearer COLE_O_MESMO_MCP_TOKEN_DO_ENV_DO_CONSULTORIO"

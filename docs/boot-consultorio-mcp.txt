@@ -1,4 +1,4 @@
-BOOT MCP mxAdmin (consultorio) — IP Tailscale: 100.74.86.51
+BOOT MCP mxAdmin (consultorio) — IP Tailscale: 100.80.162.76 (desktop-u6hkfin)
 
 1) No .env do rpa:
 MCP_TOKEN=<mesmo token configurado no Cursor do Marcos>

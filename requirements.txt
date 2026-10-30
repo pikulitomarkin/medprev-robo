@@ -10,12 +10,11 @@ pillow>=10.3.0
 numpy>=1.26.0
 opencv-python-headless>=4.8.0
 
-# MCP remoto (Cursor -> consultorio)
-mcp>=1.9.0,<3
+# HTTP remoto (Cursor/agente -> consultorio via Tailscale)
+# Nao usar pacote `mcp` no Python 3.14-32 (puxa cryptography sem wheel).
 uvicorn>=0.30.0
 starlette>=0.37.0
 anyio>=4.0.0
-httpx>=0.27.0
 
 # Dev / testes
 pytest>=8.2.0
