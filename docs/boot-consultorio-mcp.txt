@@ -1,0 +1,14 @@
+BOOT MCP mxAdmin (consultorio) — IP Tailscale: 100.74.86.51
+
+1) No .env do rpa:
+MCP_TOKEN=<mesmo token configurado no Cursor do Marcos>
+MCP_HOST=0.0.0.0
+MCP_PORT=8765
+
+2) git pull
+3) mxAdmin aberto
+4) CMD como Administrador:
+   cd /d C:\Users\Consultório 3\MedBH\rpa
+   scripts\start-mcp.bat
+
+5) PC Marcos: Tailscale instalado + mesma conta; Cursor MCP Refresh (medbh-mxadmin).

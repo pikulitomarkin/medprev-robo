@@ -9,7 +9,7 @@ Cursor (Marcos) --Tailscale--> http://100.x.y.z:8765/mcp --Bearer--> vision RPA 
 ## 1. Consultório (uma vez)
 
 1. Instalar [Tailscale](https://tailscale.com/download) e entrar na **mesma conta/tailnet** do Marcos.
-2. Anotar o IP Tailscale (`100.x.y.z`) — `tailscale ip -4`.
+2. Anotar o IP Tailscale — `tailscale ip -4` (consultório atual: `100.74.86.51`).
 3. No repo:
 
 ```bat
@@ -53,7 +53,7 @@ Deixar essa janela aberta.
 ## 3. Cursor no PC do Marcos
 
 1. Copiar [`mcp.json.example`](mcp.json.example) para a config MCP do Cursor.
-2. Trocar `100.x.y.z` pelo IP Tailscale do consultório e o token.
+2. URL `http://100.74.86.51:8765/mcp` + o mesmo `MCP_TOKEN` do `.env` do consultório.
 3. Settings → MCP → Refresh. Namespace esperado: `medbh-mxadmin` (tools `mx_*`).
 
 Exemplo de entrada:
