@@ -54,7 +54,17 @@ Se `opencv` falhar no Python 3.14-32, avise — usamos so coordenadas + PrintWin
 .\.venv32\Scripts\python.exe -m medbh_rpa vision run-flow agenda
 ```
 
+## Explorar menus do topo (Cadastros / Atendimento / Caixa / Financeiro / Relatorios)
+
+mxAdmin aberto na tela inicial. O robô assume o mouse, clica cada menu, tira foto do dropdown, pede a IA o que cada item faz, fecha com ESC e grava `data/maps/top_menus.json`.
+
+```bat
+.\.venv32\Scripts\python.exe -m medbh_rpa vision explore-menus
+```
+
+So abre/fecha menus — nao grava dados nem confirma formularios.
+
 ## Limitacao honesta
 
-"Explorar o sistema inteiro sozinho" sem risco nao e seguro em ERP de producao.
-O robô **mapeia tela a tela** com snapshot+IA e **voce confirma** os templates dos fluxos criticos (paciente, agendar, caixa, guia).
+Entrar em todos os formularios automaticamente em ERP de producao e arriscado.
+Depois do mapa dos menus, gravamos templates so dos fluxos criticos (paciente, agendar, caixa, guia).

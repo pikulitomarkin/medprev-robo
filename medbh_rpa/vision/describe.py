@@ -8,19 +8,18 @@ from typing import Any
 from medbh_rpa.config import get_settings
 
 
-def describe_screen(image_path: Path) -> dict[str, Any]:
-    """Usa OpenAI Vision para listar botoes/campos visiveis (ajuda no mapeamento)."""
+def ask_vision_json(
+    image_path: Path,
+    prompt: str,
+    *,
+    max_tokens: int = 1200,
+) -> dict[str, Any]:
+    """Envia imagem + prompt para OpenAI Vision e tenta parsear JSON da resposta."""
     settings = get_settings()
     if not settings.openai_api_key:
-        return {
-            "ok": False,
-            "message": "OPENAI_API_KEY ausente no .env",
-        }
+        return {"ok": False, "message": "OPENAI_API_KEY ausente no .env"}
 
-    try:
-        from urllib import request
-    except ImportError:
-        return {"ok": False, "message": "urllib indisponivel"}
+    from urllib import request
 
     raw = Path(image_path).read_bytes()
     b64 = base64.b64encode(raw).decode("ascii")
@@ -30,28 +29,15 @@ def describe_screen(image_path: Path) -> dict[str, Any]:
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            "Esta e a tela do sistema mxAdmin (intermediacao medica). "
-                            "Liste em JSON os elementos clicaveis visiveis: menus, botoes, "
-                            "campos e abas. Formato: "
-                            '{"elements":[{"name":"...","type":"button|field|menu|tab",'
-                            '"approx_position":"top|center|bottom left|right",'
-                            '"notes":"..."}]} '
-                            "Sem markdown, so JSON."
-                        ),
-                    },
+                    {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{b64}",
-                        },
+                        "image_url": {"url": f"data:image/png;base64,{b64}"},
                     },
                 ],
             }
         ],
-        "max_tokens": 1200,
+        "max_tokens": max_tokens,
     }
 
     req = request.Request(
@@ -64,7 +50,7 @@ def describe_screen(image_path: Path) -> dict[str, Any]:
         method="POST",
     )
     try:
-        with request.urlopen(req, timeout=90) as resp:
+        with request.urlopen(req, timeout=120) as resp:
             body = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
         return {"ok": False, "message": str(exc)}
@@ -74,22 +60,49 @@ def describe_screen(image_path: Path) -> dict[str, Any]:
         .get("message", {})
         .get("content", "")
     )
-    parsed: Any = None
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        # tenta extrair bloco JSON
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            try:
-                parsed = json.loads(text[start : end + 1])
-            except Exception:
-                parsed = None
+    parsed = _parse_json_loose(text)
+    return {
+        "ok": parsed is not None,
+        "data": parsed,
+        "raw_text": text,
+        "model": settings.agent_model,
+        "message": None if parsed is not None else "resposta nao era JSON",
+    }
 
+
+def _parse_json_loose(text: str) -> Any | None:
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except Exception:
+            return None
+    return None
+
+
+def describe_screen(image_path: Path) -> dict[str, Any]:
+    """Usa OpenAI Vision para listar botoes/campos visiveis (ajuda no mapeamento)."""
+    prompt = (
+        "Esta e a tela do sistema mxAdmin (intermediacao medica). "
+        "Liste em JSON os elementos clicaveis visiveis: menus, botoes, "
+        "campos e abas. Formato: "
+        '{"elements":[{"name":"...","type":"button|field|menu|tab",'
+        '"approx_position":"top|center|bottom left|right",'
+        '"notes":"..."}]} '
+        "Sem markdown, so JSON."
+    )
+    result = ask_vision_json(image_path, prompt, max_tokens=1200)
+    if not result.get("ok"):
+        return result
+    parsed = result.get("data") or {}
     return {
         "ok": True,
-        "raw_text": text,
-        "elements": (parsed or {}).get("elements") if isinstance(parsed, dict) else None,
-        "model": settings.agent_model,
+        "raw_text": result.get("raw_text"),
+        "elements": parsed.get("elements") if isinstance(parsed, dict) else None,
+        "model": result.get("model"),
     }

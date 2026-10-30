@@ -65,6 +65,16 @@ def main(argv: list[str] | None = None) -> int:
     p_rec.add_argument("--step", required=True, help="JSON do passo")
     p_runf = vis_sub.add_parser("run-flow", help="Executa fluxo mapeado em data/maps")
     p_runf.add_argument("flow")
+    p_exp = vis_sub.add_parser(
+        "explore-menus",
+        help="Clica Cadastros/Atendimento/Caixa/Financeiro/Relatorios e mapeia dropdowns",
+    )
+    p_exp.add_argument(
+        "--menus",
+        default="",
+        help="Lista separada por virgula (padrao: 5 menus principais)",
+    )
+    p_exp.add_argument("--pause", type=float, default=0.9, help="Espera apos cada clique")
 
     p_run = sub.add_parser("run", help="Executa um fluxo stub (mock/uia)")
     p_run.add_argument("flow", choices=sorted(FLOWS.keys()))
@@ -161,6 +171,40 @@ def main(argv: list[str] | None = None) -> int:
         if cmd == "run-flow":
             _print(vc.run_flow_file(args.flow))
             return 0
+        if cmd == "explore-menus":
+            from medbh_rpa.vision.explore import DEFAULT_MENUS, explore_top_menus
+
+            menus = (
+                [m.strip() for m in args.menus.split(",") if m.strip()]
+                if args.menus
+                else list(DEFAULT_MENUS)
+            )
+            result = explore_top_menus(vc, menus=menus, pause=args.pause)
+            slim = {
+                "ok": result.get("ok"),
+                "mode": result.get("mode"),
+                "missing": result.get("missing"),
+                "map_file": result.get("map_file"),
+                "index_file": result.get("index_file"),
+                "out_dir": result.get("out_dir"),
+                "menus": [
+                    {
+                        "name": m.get("name"),
+                        "ok": m.get("ok"),
+                        "coords": m.get("coords"),
+                        "screen_summary": (m.get("describe") or {}).get("screen_summary"),
+                        "items": [
+                            i.get("label")
+                            for i in ((m.get("describe") or {}).get("items") or [])
+                        ],
+                        "error": m.get("message") or m.get("describe_error"),
+                    }
+                    for m in (result.get("menus") or [])
+                ],
+                "message": result.get("message"),
+            }
+            _print(slim)
+            return 0 if result.get("ok") else 1
 
     if args.command == "run":
         _print(run_flow(args.flow, _parse_payload(args.payload)))
