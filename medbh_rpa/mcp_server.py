@@ -104,8 +104,23 @@ def build_tools(vc: VisionController) -> dict[str, Callable[..., dict[str, Any]]
         )
         return explore_top_menus(vc, menus=menu_list, pause=float(pause))
 
-    def mx_open_menu_item(menu: str, item: str, pause: float = 0.7) -> dict[str, Any]:
-        return open_menu_item(vc, menu, item, pause=float(pause))
+    def mx_open_menu_item(
+        menu: str,
+        item: str,
+        pause: float = 0.7,
+        glide_ms: int = 1200,
+        item_x: int | None = None,
+        item_y: int | None = None,
+    ) -> dict[str, Any]:
+        return open_menu_item(
+            vc,
+            menu,
+            item,
+            pause=float(pause),
+            glide_ms=int(glide_ms),
+            item_x=item_x,
+            item_y=item_y,
+        )
 
     def mx_map_screen(name: str, close_after: bool = False) -> dict[str, Any]:
         return map_screen(vc, name, close_after=bool(close_after))
@@ -151,8 +166,15 @@ TOOL_SCHEMA: list[dict[str, Any]] = [
     },
     {
         "name": "mx_open_menu_item",
-        "description": "Abre menu+item por texto",
-        "params": {"menu": "str", "item": "str", "pause": "float"},
+        "description": "Abre menu+item com mouse lento (glide). Ex.: Atendimento / Agendar Atendimento",
+        "params": {
+            "menu": "str",
+            "item": "str",
+            "pause": "float",
+            "glide_ms": "int",
+            "item_x": "int?",
+            "item_y": "int?",
+        },
     },
     {
         "name": "mx_map_screen",

@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from medbh_rpa.vision.describe import ask_vision_json
-from medbh_rpa.vision.input_win import press_key
+from medbh_rpa.vision.input_win import click_with_glide, press_key
+from medbh_rpa.vision.capture import find_window, focus_window
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,35 @@ FALLBACK_MENU_COORDS: dict[str, tuple[int, int]] = {
     "relatorios": (483, 18),
     "relatórios": (483, 18),
     "ajuda": (560, 18),
+}
+
+# Ordem real do dropdown Atendimento (print 30/10/2026).
+# y = menu_y + first_offset + index * row_h  (relativo a janela)
+ATENDIMENTO_ITEMS: list[str] = [
+    "Agendar Atendimento",
+    "Cancelar Atendimento",
+    "Transferir Propriedade",
+    "Transferência Programada",
+    "Meus Atendimentos",
+    "Meus Atendimentos Transferidos",
+    "Histórico de alterações",
+    "Análise de Atendimentos",
+    "Rastreamento de Atendimento",
+    "Observações de Atendimentos",
+    "Retirar do pagamento web",
+    "Pré-Cancelamento",
+    "Validar e-Guia",
+    "Guias Manuais",
+    "PIX - Envio de atendimentos",
+]
+
+MENU_ITEM_LAYOUT: dict[str, dict[str, Any]] = {
+    "atendimento": {
+        "item_x": 300,
+        "first_offset": 28,
+        "row_h": 22,
+        "items": ATENDIMENTO_ITEMS,
+    },
 }
 
 
@@ -77,23 +107,41 @@ def locate_dropdown_item(image_path: Path, item_label: str) -> dict[str, Any]:
     return ask_vision_json(image_path, prompt, max_tokens=700)
 
 
+def _resolve_item_coords(
+    menu_key: str, item: str, mx: int, my: int
+) -> tuple[int, int, str] | None:
+    layout = MENU_ITEM_LAYOUT.get(menu_key)
+    if not layout:
+        return None
+    want = _norm(item)
+    items: list[str] = list(layout["items"])
+    idx = next((i for i, label in enumerate(items) if want in _norm(label) or _norm(label) in want), None)
+    if idx is None:
+        return None
+    ix = int(layout["item_x"])
+    iy = int(my + layout["first_offset"] + idx * layout["row_h"])
+    return ix, iy, items[idx]
+
+
 def open_menu_item(
     controller: Any,
     menu: str,
     item: str,
     *,
     pause: float = 0.7,
+    glide_ms: int = 1200,
     allow_write: bool = False,
+    item_x: int | None = None,
+    item_y: int | None = None,
 ) -> dict[str, Any]:
     """
-    Abre menu do topo e clica no item pelo label (Vision), nao por Y fixo.
-    allow_write reservado — esta acao so navega; nao grava dados no ERP.
+    Abre menu do topo e vai ao item com mouse LENTO (glide).
+    WinForms fecha dropdown se o cursor 'teleportar'.
     """
-    _ = allow_write  # navegacao e sempre permitida
+    _ = allow_write
     coords_map = _load_menu_coords(controller.maps_dir)
     key = _norm(menu)
     if key not in coords_map:
-        # tenta match parcial
         hit = next((k for k in coords_map if key in k or k in key), None)
         if hit is None:
             return {
@@ -104,58 +152,61 @@ def open_menu_item(
         key = hit
 
     mx, my, conf = coords_map[key]
-    focus = controller.focus()
-    if not focus.get("ok"):
-        return focus
+    matched = item
+    if item_x is not None and item_y is not None:
+        ix, iy = int(item_x), int(item_y)
+    else:
+        resolved = _resolve_item_coords(key, item, mx, my)
+        if resolved is None:
+            return {
+                "ok": False,
+                "message": (
+                    f"item '{item}' sem layout conhecido para menu '{menu}'. "
+                    "Passe item_x/item_y ou cadastre em MENU_ITEM_LAYOUT."
+                ),
+                "hint": "Nao usamos Vision entre cliques — snapshot fecha o dropdown.",
+            }
+        ix, iy, matched = resolved
 
-    # fecha dropdown residual
+    info = find_window(controller.title_key)
+    if info is None:
+        return {"ok": False, "message": "janela nao encontrada"}
+    focus_window(info.hwnd)
+    time.sleep(0.15)
+
     press_key("{ESC}")
-    time.sleep(0.25)
+    time.sleep(0.3)
 
-    click_menu = controller.click_xy(mx, my, absolute=False)
-    time.sleep(pause)
+    sx_m = info.rect[0] + mx
+    sy_m = info.rect[1] + my
+    sx_i = info.rect[0] + ix
+    sy_i = info.rect[1] + iy
 
-    snap = controller.snapshot("menu_open")
-    if not snap.get("ok"):
-        return {"ok": False, "stage": "snapshot_menu", "click_menu": click_menu, "snap": snap}
-
-    loc = locate_dropdown_item(Path(snap["path"]), item)
-    if not loc.get("ok"):
-        press_key("{ESC}")
-        return {"ok": False, "stage": "locate_item", "locate": loc, "click_menu": click_menu}
-
-    data = loc.get("data") or {}
-    if not data.get("found") or data.get("x") is None or data.get("y") is None:
-        press_key("{ESC}")
-        return {
-            "ok": False,
-            "stage": "item_not_found",
-            "wanted": item,
-            "visible": data.get("all_visible"),
-            "locate": data,
-            "click_menu": click_menu,
-            "menu_coords": {"x": mx, "y": my, "confidence": conf},
-        }
-
-    ix, iy = int(data["x"]), int(data["y"])
-    click_item = controller.click_xy(ix, iy, absolute=False)
-    time.sleep(pause)
+    log.info(
+        "glide menu=%s item=%s (%s,%s)->(%s,%s) ms=%s",
+        menu,
+        matched,
+        sx_m,
+        sy_m,
+        sx_i,
+        sy_i,
+        glide_ms,
+    )
+    click_with_glide(sx_m, sy_m, sx_i, sy_i, glide_ms=int(glide_ms))
+    time.sleep(max(0.4, pause))
 
     after = controller.snapshot("after_menu_item")
     return {
-        "ok": bool(click_item.get("ok")) and bool(after.get("ok")),
+        "ok": bool(after.get("ok")),
         "menu": menu,
         "item": item,
-        "matched_label": data.get("matched_label"),
+        "matched_label": matched,
+        "mode": "glide",
+        "glide_ms": glide_ms,
         "menu_coords": {"x": mx, "y": my, "confidence": conf},
-        "item_coords": {
-            "x": ix,
-            "y": iy,
-            "confidence": data.get("confidence"),
-        },
-        "visible_before_click": data.get("all_visible"),
-        "click_menu": click_menu,
-        "click_item": click_item,
+        "item_coords": {"x": ix, "y": iy},
+        "screen_menu": {"x": sx_m, "y": sy_m},
+        "screen_item": {"x": sx_i, "y": sy_i},
         "snapshot": after.get("path"),
         "last": after.get("last"),
     }
